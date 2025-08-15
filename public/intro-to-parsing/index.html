@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+        <meta content="text/html; charset=UTF-8" http-equiv="content-type"/>
+        <meta content="width=device-width, initial-scale=1" name="viewport"/>
+
+        
+        
+        
+
+        
+
+        
+
+        
+
+        
+        
+        
+
+        <title>A brief introduction to parsing</title>
+        
+        <meta name="title" content="A brief introduction to parsing">
+        
+        
+        <meta name="generator" content="Zola v0.16.1">
+
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://jhwlr.io/intro-to-parsing/">
+        <meta property="og:site_name" content="">
+        <meta property="og:title" content="A brief introduction to parsing">
+        
+        
+
+        
+        
+        <meta property="twitter:card" content="summary_large_image">
+        <meta property="twitter:url" content="https://jhwlr.io/intro-to-parsing/">
+        <meta property="twitter:title" content="A brief introduction to parsing">
+        
+        
+        
+        
+        <link rel="canonical" href="https://jhwlr.io/intro-to-parsing/">
+        
+        <script type="application/ld+json">
+            {
+                
+                "url":"https://jhwlr.io/intro-to-parsing/",
+                "@type":"WebSite",
+                "headline":"A brief introduction to parsing",
+                "name":"A brief introduction to parsing",
+                
+                "@context":"https://schema.org"
+            }
+        </script>
+        
+        
+        
+        <link rel="stylesheet" href="https://jhwlr.io/style.css"/>
+        
+    </head>
+    <body theme="auto">
+        <div class="w">
+            <header>
+                
+                <nav>
+                    
+                    <a href="/" >~</a>
+                    
+                    <a href="https://github.com/jhwlr" target="_blank" rel="noreferrer noopener">github</a>
+                    
+                </nav>
+                
+                
+<p><a href="..">..</a>/intro-to-parsing</p>
+<p class="post-meta">
+    <span>~17 min read</span> | <time datetime="2025-08-15">2025-08-15</time>
+</p>
+<h1>A brief introduction to parsing</h1>
+
+            </header>
+            <main class="page-content" aria-label="Content">
+                
+
+
+Table of contents
+<ul>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#parsing-programming-languages">Parsing programming languages</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#a-simple-language">A simple language</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#lexical-analysis">Lexical analysis</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#lexical-analysis-automated">Lexical analysis, automated</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#parser-grammar-police">Parser == grammar police</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#a-simple-parser">A simple parser</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#syntax-trees-and-recursive-descent">Syntax trees and recursive descent</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#parsing-expressions">Parsing expressions</a>
+        
+    </li>
+
+    <li>
+        <a href="https://jhwlr.io/intro-to-parsing/#closing">Closing</a>
+        
+    </li>
+
+</ul>
+
+
+<hr />
+<p>If you're reading this, you probably know how to program a computer. You write some text,
+and use a special thing called a "compiler" (sometimes also "interpreter") to turn that
+text into instructions for your computer<sup class="footnote-reference"><a href="#1">1</a></sup>.</p>
+<p>I want to attempt to explain<sup class="footnote-reference"><a href="#10">2</a></sup> a small part of
+the process of transforming text into those instructions, usually referred to as "parsing",
+and then implement a <em>parser</em> in Rust.</p>
+<h2 id="parsing-programming-languages">Parsing programming languages</h2>
+<p>As a programmer, you understand how to recognize different parts of a programming language.
+It's similar to reading any other form of text. You read it one line at a time, or by scanning
+for patterns. Each chunk is given some kind of meaning based on its contents. You intuitively
+understand the <em>grammar</em> of a programming language, quickly transforming it into semantics
+in your head.</p>
+<div style="display:flex; justify-content:center; width: 100%">
+<img style="filter:none" width="50%" src="/intro-to-parsing/tokens.svg">
+</div>
+<p>But a computer doesn't know how to do that without your help. It's your job to break up the text into
+smaller pieces, the individual <em>syntactic elements</em> of a program. You also have to assign each piece
+of syntax some sort of meaning. The program which does this is usually called a <em>parser</em>, and is
+often only one <em>stage</em> in a full <a href="https://en.wikipedia.org/wiki/Compiler"><em>compiler</em></a>.</p>
+<p>The parser reads <em>source code</em>, and transforms it into a <em>syntax tree</em><sup class="footnote-reference"><a href="#2">3</a></sup>. Depending on what exactly
+you're trying to do, this syntax tree can either be <em>concrete</em> or <em>abstract</em>.</p>
+<p>A concrete syntax tree (CST)
+stores everything necessary to preserve the exact <em>appearance</em> of a program: Parentheses, curly brackets,
+keywords, and so on. An abstract syntax tree (AST) only stores whatever is necessary to preserve the program's
+<em>meaning</em>, discarding everything else. We'll be using an AST<sup class="footnote-reference"><a href="#3">4</a></sup>.</p>
+<div style="display:flex; justify-content:center; width: 100%">
+<img style="filter:none" width="50%" src="/intro-to-parsing/AST.svg">
+</div>
+<h2 id="a-simple-language">A simple language</h2>
+<p>Our testbed for parsing will be <i>simp</i>le programming language, called <code>simp</code><sup class="footnote-reference"><a href="#4">5</a></sup>.</p>
+<p>Here's a <code>simp</code>le program:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">factorial</span><span>(n) {
+</span><span>  </span><span style="color:#b48ead;">if</span><span> n &lt;= </span><span style="color:#d08770;">1 </span><span>{ n }
+</span><span>  </span><span style="color:#b48ead;">else </span><span>{ n * </span><span style="color:#96b5b4;">factorial</span><span>(n - </span><span style="color:#d08770;">1</span><span>) }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">let</span><span> fact_5 = </span><span style="color:#96b5b4;">factorial</span><span>(</span><span style="color:#d08770;">5</span><span>);
+</span><span style="color:#96b5b4;">assert</span><span>(fact_5 == </span><span style="color:#d08770;">120</span><span>, &quot;</span><span style="color:#a3be8c;">5! must be 120</span><span>&quot;);
+</span></code></pre>
+<p>It's so simple that it's <em>just barely</em> useful. We have:</p>
+<ul>
+<li>Functions, and function calls <small>(including recursion!)</small></li>
+<li>Variables</li>
+<li>Various operators</li>
+<li>Integers, strings</li>
+</ul>
+<p>And not much more. The syntax is heavily inspired by Rust; it's vaguely C-like with curly
+brackets and semicolons, is "expression-based"<sup class="footnote-reference"><a href="#5">6</a></sup>, calls functions <code>fn</code>, and so on.</p>
+<p>We have some fancy structured text. What now?</p>
+<h2 id="lexical-analysis">Lexical analysis</h2>
+<p>To make the process of parsing easier, source text is typically first split up into a list of <em>tokens</em>,
+referred to as "tokenization" or "lexing" (short for <a href="https://en.wikipedia.org/wiki/Lexical_analysis">lexical analysis</a>).
+It's not strictly necessary, but it is useful; <code>simp</code> does not use <a href="https://en.wikipedia.org/wiki/Off-side_rule">significant indentation</a>,
+so using a lexer means we can discard all whitespace characters before we even start parsing.
+Our parser becomes a lot simpler as a result.</p>
+<p>Each token will need to store what <em>kind</em> of token it is, and a <em>span</em><sup class="footnote-reference"><a href="#6">7</a></sup>. We'll use the span to retrieve
+the token's <em>lexeme</em> -- its slice of the source code.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>Token {
+</span><span>    </span><span style="color:#bf616a;">kind</span><span>: TokenKind,
+</span><span>    </span><span style="color:#bf616a;">span</span><span>: Span,
+</span><span>}
+</span></code></pre>
+<blockquote>
+<p>Code snippets in this article are incomplete to preserve space;
+the full source code is <a href="https://github.com/jhwlr/simp">available on GitHub</a>.</p>
+</blockquote>
+<p>The core of our lexer is a loop, reading one <em>byte</em><sup class="footnote-reference"><a href="#8">8</a></sup> at a time from our source text.
+It'll also need to keep track of where in the source code it is.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">lex</span><span>(</span><span style="color:#bf616a;">code</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; Vec&lt;Token&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> bytes = code.</span><span style="color:#96b5b4;">as_bytes</span><span>();
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> pos = </span><span style="color:#d08770;">0</span><span>;
+</span><span>    </span><span style="color:#b48ead;">while</span><span> pos &lt; bytes.</span><span style="color:#96b5b4;">len</span><span>() {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> start = pos; </span><span style="color:#65737e;">// token&#39;s starting position
+</span><span>        </span><span style="color:#65737e;">// ...
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Next we need to determine if we're looking at a character which is valid in this position.
+Rust's pattern matching is convenient for this task.</p>
+<p>To match one-byte tokens, such as <code>+</code> and <code>-</code>, we only need to match the first byte:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">match</span><span> bytes[pos] {
+</span><span>    </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">+</span><span>&#39; =&gt; { </span><span style="color:#65737e;">/* ... */ </span><span>}
+</span><span>    </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">-</span><span>&#39; =&gt; { </span><span style="color:#65737e;">/* ... */ </span><span>}
+</span><span>    </span><span style="color:#65737e;">// ...
+</span><span>}
+</span></code></pre>
+<p>For two-byte tokens, we'll need a nested match:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">match</span><span> bytes[pos] {
+</span><span>    </span><span style="color:#65737e;">// ...
+</span><span>    </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">=</span><span>&#39; =&gt; </span><span style="color:#b48ead;">if</span><span> bytes.</span><span style="color:#96b5b4;">get</span><span>(pos+</span><span style="color:#d08770;">1</span><span>) == Some(&amp;</span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">=</span><span>&#39;) {
+</span><span>        </span><span style="color:#65737e;">// matched `==`
+</span><span>        pos += </span><span style="color:#d08770;">2</span><span>;
+</span><span>    } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>        </span><span style="color:#65737e;">// matched only `=`
+</span><span>        pos += </span><span style="color:#d08770;">1</span><span>;
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Our final token "category" is an arbitrary-length sequence.
+Our lexer is <em>greedy</em>, meaning it continues to "append" characters to the current token for
+as long as it's a valid sequence. We'll use an inner loop for that:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">match</span><span> bytes[pos] {
+</span><span>    </span><span style="color:#65737e;">// ...
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// identifier
+</span><span>    </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">_</span><span>&#39; | </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">a</span><span>&#39;..=</span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">z</span><span>&#39; | </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">A</span><span>&#39;..=</span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">Z</span><span>&#39; =&gt; {
+</span><span>        pos += </span><span style="color:#d08770;">1</span><span>;
+</span><span>
+</span><span>        </span><span style="color:#b48ead;">while let </span><span>Some(byte) = bytes.</span><span style="color:#96b5b4;">get</span><span>(pos)
+</span><span>            &amp;&amp; </span><span style="color:#b48ead;">let b</span><span>&#39;</span><span style="color:#a3be8c;">_</span><span>&#39; | </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">a</span><span>&#39;..=</span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">z</span><span>&#39; | </span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">A</span><span>&#39;..=</span><span style="color:#b48ead;">b</span><span>&#39;</span><span style="color:#a3be8c;">Z</span><span>&#39; = *byte
+</span><span>        {
+</span><span>            pos += </span><span style="color:#d08770;">1</span><span>;
+</span><span>        }
+</span><span>
+</span><span>        </span><span style="color:#65737e;">// ...
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p><code>simp</code> also has a few keywords. After we lex an identifier, we'll have to check if it's a keyword,
+and output the token kind for that keyword instead.</p>
+<p>Once we've "consumed" some valid sequence of characters, we can construct a token:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">let</span><span> end = pos;
+</span><span>Token {
+</span><span>    kind: </span><span style="color:#65737e;">/*...*/</span><span>,
+</span><span>    span: Span::from(start..end),
+</span><span>}
+</span></code></pre>
+<h2 id="lexical-analysis-automated">Lexical analysis, automated</h2>
+<p>While I'd be happy to write a lexer by hand, it tends to be a very error-prone, tedious task.
+To make our job easier, we'll use a library called <a href="https://github.com/maciejhirsz/logos">Logos</a>.
+It's easy to use, and generates <em>very</em> fast lexers, the kind which would be very impractical
+to write by hand.</p>
+<p>I intentionally omitted the definition of our <code>TokenKind</code> enum until now. Here it is:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>#[</span><span style="color:#bf616a;">derive</span><span>(Logos)]
+</span><span>#[</span><span style="color:#bf616a;">logos</span><span>(skip </span><span style="color:#b48ead;">r</span><span>&quot;</span><span style="color:#a3be8c;">[ \t\n\r]+</span><span>&quot;)]
+</span><span style="color:#b48ead;">enum </span><span>TokenKind {
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">fn</span><span>&quot;)] </span><span style="color:#d08770;">KW_FN</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">if</span><span>&quot;)] </span><span style="color:#d08770;">KW_IF</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">else</span><span>&quot;)] </span><span style="color:#d08770;">KW_ELSE</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">let</span><span>&quot;)] </span><span style="color:#d08770;">KW_LET</span><span>,
+</span><span>
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">;</span><span>&quot;)] </span><span style="color:#d08770;">TOK_SEMI</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">(</span><span>&quot;)] </span><span style="color:#d08770;">TOK_LPAREN</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">)</span><span>&quot;)] </span><span style="color:#d08770;">TOK_RPAREN</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">{</span><span>&quot;)] </span><span style="color:#d08770;">TOK_LBRACE</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">}</span><span>&quot;)] </span><span style="color:#d08770;">TOK_RBRACE</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">,</span><span>&quot;)] </span><span style="color:#d08770;">TOK_COMMA</span><span>,
+</span><span>
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">-</span><span>&quot;)] </span><span style="color:#d08770;">OP_MINUS</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">+</span><span>&quot;)] </span><span style="color:#d08770;">OP_PLUS</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">*</span><span>&quot;)] </span><span style="color:#d08770;">OP_STAR</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;)] </span><span style="color:#d08770;">OP_SLASH</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">=</span><span>&quot;)] </span><span style="color:#d08770;">OP_EQ</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">||</span><span>&quot;)] </span><span style="color:#d08770;">OP_OR</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">&amp;&amp;</span><span>&quot;)] </span><span style="color:#d08770;">OP_AND</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">==</span><span>&quot;)] </span><span style="color:#d08770;">OP_EQEQ</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">!=</span><span>&quot;)] </span><span style="color:#d08770;">OP_NEQ</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">&lt;</span><span>&quot;)] </span><span style="color:#d08770;">OP_LT</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">&lt;=</span><span>&quot;)] </span><span style="color:#d08770;">OP_LE</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">&gt;</span><span>&quot;)] </span><span style="color:#d08770;">OP_GT</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">&gt;=</span><span>&quot;)] </span><span style="color:#d08770;">OP_GE</span><span>,
+</span><span>    #[</span><span style="color:#bf616a;">token</span><span>(&quot;</span><span style="color:#a3be8c;">!</span><span>&quot;)] </span><span style="color:#d08770;">OP_BANG</span><span>,
+</span><span>
+</span><span>    #[</span><span style="color:#bf616a;">regex</span><span>(</span><span style="color:#b48ead;">r</span><span>&quot;</span><span style="color:#a3be8c;">0|([1-9](0-9)*)</span><span>&quot;)]
+</span><span>    </span><span style="color:#d08770;">LIT_INT</span><span>,
+</span><span>
+</span><span>    #[</span><span style="color:#bf616a;">regex</span><span>(</span><span style="color:#b48ead;">r</span><span>#&quot;</span><span style="color:#a3be8c;">&quot;([^&quot;\\]|\\.)*&quot;</span><span>&quot;#)]
+</span><span>    </span><span style="color:#d08770;">LIT_STR</span><span>,
+</span><span>
+</span><span>    #[</span><span style="color:#bf616a;">regex</span><span>(</span><span style="color:#b48ead;">r</span><span>&quot;</span><span style="color:#a3be8c;">[a-zA-Z_][a-zA-Z_0-9]*</span><span>&quot;)]
+</span><span>    </span><span style="color:#d08770;">LIT_IDENT</span><span>,
+</span><span>
+</span><span>    </span><span style="color:#d08770;">TOK_ERROR</span><span>,
+</span><span>    </span><span style="color:#d08770;">TOK_EOF</span><span>,
+</span><span>}
+</span></code></pre>
+<p><code>Logos</code> generates a lexer for us using the annotations on this enum. We have tokens for keywords,
+punctuation characters, operators, and "literals" identified by a <a href="https://en.wikipedia.org/wiki/Regular_expression">regular expression</a>.
+We also have two special tokens:</p>
+<ul>
+<li><code>TOK_ERROR</code>, produced when the lexer can't match a given part of the source code against <em>any</em> token, and</li>
+<li><code>TOK_EOF</code>, produced when the lexer reaches the end of the file.</li>
+</ul>
+<p>If you're curious about what it expands to, <a href="https://gist.github.com/jhwlr/628c82e22ed5d0ee668c079706f3e9de">here it is in a gist</a>.</p>
+<details>
+<summary>Aside: Storing data in TokenKind</summary>
+<p>Our <code>TokenKind</code> variants don't carry any data. It is possible to get <code>Logos</code> to parse integers for us, and store the resulting value
+inside the <code>TokenKind</code> enum. We're not going to use that feature. What we want is for the lexer to only <em>recognize</em> tokens, and to
+continue even when encountering an error. We'll be much better positioned to report errors in the parser, so we'll process the token's
+lexeme there, turning a <code>LIT_INT</code> into an <code>i64</code>, for example.</p>
+<p>It's also a bit more complicated to match on tokens when they may carry values. In my experience, doing it this way leads to leaner,
+faster code.</p>
+</details>
+<p>If you're a Rust enjoyer, you may cringe at my choice of naming for the enum variants. There's a good reason for it,
+which is that the enum type is not referenced directly in the parser. Instead, we have a glob import for all of its
+variants into the parser's file:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use crate</span><span>::token::TokenKind::*;
+</span></code></pre>
+<p>This lets us write slightly terser code, but we need the variant names to not conflict with anything else in the file.
+I hope you'll forgive the weird naming convention!</p>
+<p>Now we can "write" our lexer:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">lex</span><span>(</span><span style="color:#bf616a;">src</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; Vec&lt;Token&gt; {
+</span><span>    TokenKind::lexer(src)
+</span><span>        .</span><span style="color:#96b5b4;">spanned</span><span>()
+</span><span>        .</span><span style="color:#96b5b4;">map</span><span>(|</span><span style="color:#bf616a;">item</span><span>| </span><span style="color:#b48ead;">match</span><span> item {
+</span><span>            (Ok(kind), span) =&gt; Token {
+</span><span>                kind,
+</span><span>                span: span.</span><span style="color:#96b5b4;">into</span><span>(),
+</span><span>            },
+</span><span>            (Err(()), span) =&gt; Token {
+</span><span>                kind: </span><span style="color:#d08770;">TOK_ERROR</span><span>,
+</span><span>                span: span.</span><span style="color:#96b5b4;">into</span><span>(),
+</span><span>            },
+</span><span>        })
+</span><span>        .</span><span style="color:#96b5b4;">chain</span><span>([Token {
+</span><span>            kind: </span><span style="color:#d08770;">TOK_EOF</span><span>,
+</span><span>            span: Span::empty(),
+</span><span>        }])
+</span><span>        .</span><span style="color:#96b5b4;">collect</span><span>()
+</span><span>}
+</span></code></pre>
+<p><code>Logos</code> is doing a <strong>lot</strong> of heavy lifting here. An equivalent lexer would be a few hundred lines of code,
+and it wouldn't be nearly as fast. At this point, the only reason this function exists is to preprocess
+what <code>Logos</code> outputs into a <em>slightly</em> nicer form.</p>
+<h2 id="parser-grammar-police">Parser == grammar police</h2>
+<p>Before we talk about parsing, we still need to talk about <em>what</em> we'll be parsing. Human languages have grammar,
+and so do programming languages. Just like a school teacher, our parser will only accept what is <em>grammatically valid</em><sup class="footnote-reference"><a href="#7">9</a></sup>.
+For anything else, it will output syntax errors.</p>
+<p>We know what <code>simp</code> syntax looks like, but what does its grammar look like? To describe the grammar of human language,
+we often use more human language to do it. But that won't work for computers.</p>
+<p>To describe a programming language grammar, we'll use a notation called
+<a href="https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form">Extended Backus-Naur form</a> (EBNF).
+The <em>E</em> in EBNF effectively means we can do whatever we want, because there is no single<sup class="footnote-reference"><a href="#9">10</a></sup> standard!</p>
+<p>Here's what <code>simp</code>'s formal grammar looks like:</p>
+<pre data-lang="ebnf" style="background-color:#2b303b;color:#c0c5ce;" class="language-ebnf "><code class="language-ebnf" data-lang="ebnf"><span>Program = { Stmt } ;
+</span><span>
+</span><span>Stmt = StmtFn | StmtLet | StmtExpr ;
+</span><span>
+</span><span>StmtFn = &quot;fn&quot; Identifier &quot;(&quot; [ ParamList ] &quot;)&quot; Block ;
+</span><span>ParamList = Identifier { &quot;,&quot; Identifier } ;
+</span><span>
+</span><span>StmtLet = &quot;let&quot; Identifier &quot;=&quot; Expr &quot;;&quot; ;
+</span><span>
+</span><span>StmtExpr = Expr &quot;;&quot; ;
+</span><span>
+</span><span>Expr = ExprIf | ExprOr ;
+</span><span>
+</span><span>ExprIf = &quot;if&quot; Expr Block &quot;else&quot; Block ;
+</span><span>
+</span><span>ExprOr = ExprAnd { &quot;||&quot; ExprAnd } ;
+</span><span>ExprAnd = ExprEq { &quot;&amp;&amp;&quot; ExprEq } ;
+</span><span>ExprEq = ExprOrd { ( &quot;==&quot; | &quot;!=&quot; ) ExprOrd } ;
+</span><span>ExprOrd = ExprAdd { ( &quot;&lt;&quot; | &quot;&lt;=&quot; | &quot;&gt;&quot; | &quot;&gt;=&quot; ) ExprAdd } ;
+</span><span>ExprAdd = ExprMul { ( &quot;+&quot; | &quot;-&quot; ) ExprMul } ;
+</span><span>ExprMul = ExprUnary { ( &quot;*&quot; | &quot;/&quot; | &quot;%&quot; ) ExprUnary } ;
+</span><span>ExprUnary = [ &quot;-&quot; | &quot;!&quot; ] ExprPostfix ;
+</span><span>ExprPostfix = ExprPrimary { ExprCall } ;
+</span><span>ExprCall = &quot;(&quot; [ ArgList ] &quot;)&quot; ;
+</span><span>ArgList = Expr { &quot;,&quot; Expr } ;
+</span><span>
+</span><span>ExprPrimary = INTEGER
+</span><span>        | STRING
+</span><span>        | IDENTIFIER
+</span><span>        | Block
+</span><span>        | &quot;(&quot; Expr &quot;)&quot;
+</span><span>        ;
+</span><span>
+</span><span>Block = &quot;{&quot; { Stmt } [ Expr ] &quot;}&quot; ;
+</span></code></pre>
+<p>To break it down:</p>
+<ul>
+<li><code>name = ... ;</code> is a <em>production rule</em>, also called a <em>nonterminal</em>.</li>
+<li>Anything in <code>"quotes"</code> is a <em>terminal</em>, present in the code verbatim.</li>
+<li>Anything in <code>[ brackets ]</code> is optional.</li>
+<li>Anything in <code>{ braces }</code> is repeated, but also optional.</li>
+<li><code>left | right</code> means "left or right", but not both. It can be chained.</li>
+</ul>
+<p>We have two main categories of syntax: statements and expressions.</p>
+<blockquote>
+<p>“ Where an expression's main job is to produce a <em>value</em>,
+a statement's job is to produce an <em>effect</em> „</p>
+<p> </p>
+<p><a href="https://github.com/munificent">Bob Nystrom</a> in his book
+<a href="https://craftinginterpreters.com/the-lox-language.html#statements">Crafing Interpreters</a><sup class="footnote-reference"><a href="#12">11</a></sup></p>
+</blockquote>
+<p>Some rules are omitted for brevity, such as identifiers<sup class="footnote-reference"><a href="#13">12</a></sup> and strings<sup class="footnote-reference"><a href="#14">13</a></sup>.
+They tend to expand into quite a few recursive rules, which doesn't really help us here, so we treat them as <em>terminals</em>.</p>
+<p>We also have a special case in the parser for a <em>trailing expression</em> in a block of code, which is the
+implicit return value<sup class="footnote-reference"><a href="#15">14</a></sup> of that block. That case isn't in the grammar, either.</p>
+<p>And finally, we do handle trailing commas<sup class="footnote-reference"><a href="#16">15</a></sup>, which is also a bit cumbersome to write out in EBNF. If you see</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>rule = nonterminal { &quot;,&quot; nonterminal }
+</span></code></pre>
+<p>assume it should handle trailing commas <em>somehow</em>.</p>
+<h2 id="a-simple-parser">A <code>simp</code>le parser</h2>
+<p>The purpose of a parser is:</p>
+<blockquote>
+<p>Given a valid sequence of tokens, produce an AST.</p>
+</blockquote>
+<p>There are <em>many</em> ways to do this. It's a <a href="https://en.wikipedia.org/wiki/Parsing">whole field of study</a>, one we're not going to
+delve very deeply into right now.</p>
+<p>The technique I've chosen for this parser is called <a href="https://en.wikipedia.org/wiki/Recursive_descent_parser"><strong>recursive descent</strong></a>.
+It's simple, very common, and very effective. Another common technique is called <a href="https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html">pratt parsing</a>.
+Sometimes multiple different kinds of parsing techniques are combined together into a single super-parser.</p>
+<p>Our parser will read the source code, one token at a time, and traverse the grammar. For each rule we traverse, we'll either
+successfully match it, or produce an error:</p>
+<iframe
+    src="/intro-to-parsing/step-by-step.html"
+    style="border:none; width: 100%; height: 193px; overflow: hidden;"
+    onload="this.style.height=(this.contentWindow.document.body.scrollHeight+40)+'px';"
+></iframe>
+<p>In most of our parser, all we'll have to do is match on the current token,
+and advance to the next position if we find the right one.</p>
+<p>To help us with that, we'll need a cursor to keep track of which token is:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>Cursor&lt;</span><span style="color:#b48ead;">&#39;src</span><span>&gt; {
+</span><span>    </span><span style="color:#bf616a;">code</span><span>: &amp;</span><span style="color:#b48ead;">&#39;src str</span><span>,
+</span><span>    </span><span style="color:#bf616a;">tokens</span><span>: Vec&lt;Token&gt;,
+</span><span>    </span><span style="color:#bf616a;">position</span><span>: </span><span style="color:#b48ead;">usize</span><span>,
+</span><span>}
+</span></code></pre>
+<p>And a few methods on the cursor to work with our token list:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl</span><span>&lt;</span><span style="color:#b48ead;">&#39;src</span><span>&gt; Cursor&lt;</span><span style="color:#b48ead;">&#39;src</span><span>&gt; {
+</span><span>    </span><span style="color:#65737e;">/// Advance the cursor to the next token.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">advance</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>) {
+</span><span>        </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">self</span><span>.position + </span><span style="color:#d08770;">1 </span><span>&gt;= </span><span style="color:#bf616a;">self</span><span>.tokens.</span><span style="color:#96b5b4;">len</span><span>() {
+</span><span>            </span><span style="color:#b48ead;">return</span><span>;
+</span><span>        }
+</span><span>
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.position += </span><span style="color:#d08770;">1</span><span>;
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns the token under the cursor.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">current</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; Token {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.tokens[</span><span style="color:#bf616a;">self</span><span>.position]
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns the token before the cursor.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">previous</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; Token {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.tokens[</span><span style="color:#bf616a;">self</span><span>.position - </span><span style="color:#d08770;">1</span><span>]
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns the current token kind,
+</span><span>    </span><span style="color:#65737e;">/// shorthand for `c.current().kind`.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">kind</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>) -&gt; TokenKind {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">current</span><span>().kind
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns `true` if the current token matches `kind`.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">at</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">kind</span><span>: TokenKind) -&gt; </span><span style="color:#b48ead;">bool </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">current</span><span>().kind == kind
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns `true` if the previous token matched `kind`.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">was</span><span>(&amp;</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">kind</span><span>: TokenKind) -&gt; </span><span style="color:#b48ead;">bool </span><span>{
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.position &gt; </span><span style="color:#d08770;">0 </span><span>&amp;&amp; </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">previous</span><span>().kind == kind
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns `true` and advances
+</span><span>    </span><span style="color:#65737e;">/// if the current token matches `kind`.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">eat</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">kind</span><span>: TokenKind) -&gt; </span><span style="color:#b48ead;">bool </span><span>{
+</span><span>        </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">at</span><span>(kind) {
+</span><span>            </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">advance</span><span>();
+</span><span>            </span><span style="color:#d08770;">true
+</span><span>        } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>            </span><span style="color:#d08770;">false
+</span><span>        }
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">/// Returns the current token if it matches `kind`,
+</span><span>    </span><span style="color:#65737e;">/// otherwise returns an error.
+</span><span>    </span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">must</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">kind</span><span>: TokenKind) -&gt; Result&lt;Token&gt; {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> current = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">current</span><span>();
+</span><span>        </span><span style="color:#b48ead;">if </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">eat</span><span>(kind) {
+</span><span>            Ok(current)
+</span><span>        } </span><span style="color:#b48ead;">else </span><span>{
+</span><span>            </span><span style="color:#96b5b4;">error</span><span>(
+</span><span>                format!(
+</span><span>                    &quot;</span><span style="color:#a3be8c;">expected </span><span style="color:#d08770;">{kind:?}</span><span style="color:#a3be8c;">, found </span><span style="color:#d08770;">{:?}</span><span>&quot;,
+</span><span>                    current.kind,
+</span><span>                ),
+</span><span>                current.span,
+</span><span>            )
+</span><span>            .</span><span style="color:#96b5b4;">into</span><span>()
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>It's a sizeable chunk of code, but will save us a lot of typing soon.</p>
+<h2 id="syntax-trees-and-recursive-descent">Syntax trees and recursive descent</h2>
+<p>The entrypoint for our parser will be a <code>parse</code> function. It turns a string into a program, or a syntax error.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse</span><span>(</span><span style="color:#bf616a;">code</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; Result&lt;Program&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> cursor = &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor {
+</span><span>        code,
+</span><span>        tokens: </span><span style="color:#96b5b4;">lex</span><span>(code),
+</span><span>        position: </span><span style="color:#d08770;">0</span><span>,
+</span><span>    };
+</span><span>
+</span><span>    </span><span style="color:#96b5b4;">parse_program</span><span>(c)
+</span><span>}
+</span></code></pre>
+<p>The process of hand-writing a recursive descent parser involves closely following the grammar, implementing it one
+production rule at a time. We'll also define each node of the syntax tree on demand.</p>
+<p>Our entrypoint calls into <code>parse_program</code>. Starting with its syntax tree node:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>Program {
+</span><span>    </span><span style="color:#bf616a;">body</span><span>: Vec&lt;Stmt&gt;,
+</span><span>    </span><span style="color:#bf616a;">tail</span><span>: Option&lt;Expr&gt;,
+</span><span>}
+</span></code></pre>
+<p>A program is a list of statements. We'll continue parsing statements until we reach the end of the file.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#65737e;">// Program = { Stmt } ;
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_program</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Program&gt; {
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> body = Vec::new();
+</span><span>    </span><span style="color:#b48ead;">while </span><span>!c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_EOF</span><span>) {
+</span><span>        body.</span><span style="color:#96b5b4;">push</span><span>(</span><span style="color:#96b5b4;">parse_stmt</span><span>(c)?);
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// ...
+</span><span>}
+</span></code></pre>
+<details>
+<summary>Aside: Trailing expressions</summary>
+<p>We're trying to mimic Rust, which can be a bit tricky. A block of code can have a trailing expression.
+That happens when it ends with an expression, and that expression isn't terminated by a semicolon:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>{ { </span><span style="color:#d08770;">1 </span><span>} { </span><span style="color:#d08770;">2 </span><span>} } </span><span style="color:#65737e;">// valid syntax, implicit return value is `2`
+</span></code></pre>
+<p>Developing parsers (and compilers in general) often involves thinking about contrived examples like these.
+Parsers tend to have a lot of <a href="https://en.wikipedia.org/wiki/Emergence">emergent behavior</a>.
+It's your job to rein it in!</p>
+<p>You can add parser complexity to allow users of your language to write
+fewer characters. You can also keep things more verbose and explicit, and make your own life as a compiler
+developer easier, because a verbose feature which solves a problem is still probably better than not solving
+the feature at all. Sometimes there's a clever way to achieve both fewer characters and a simpler compiler.</p>
+<p>In this case, we're adding parser complexity in exchange for the ability to write code like this:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>{
+</span><span>    </span><span style="color:#b48ead;">let</span><span> a = </span><span style="color:#d08770;">1</span><span>;
+</span><span>
+</span><span>    {
+</span><span>        </span><span style="color:#65737e;">// more tightly scoped thing
+</span><span>        </span><span style="color:#b48ead;">let</span><span> secret = </span><span style="color:#d08770;">42</span><span>;
+</span><span>        </span><span style="color:#96b5b4;">foo</span><span>(a + secret)
+</span><span>    } </span><span style="color:#65737e;">// no semicolon, despite being an expression
+</span><span>
+</span><span>    a </span><span style="color:#65737e;">// correctly parsed as the trailing expression for this block
+</span><span>}
+</span></code></pre>
+<p>Because we don't want to require block-like expressions be terminated by a semicolon, we need to do a few things:</p>
+<ul>
+<li>Any statement which <em>requires</em> a semicolon, such as <code>let</code>, must consume it.</li>
+<li>Any non-trailing expression in statement position must require a semicolon.</li>
+</ul>
+<p>We can determine if an expression in statement position is trailing by checking what comes after it:</p>
+<ul>
+<li><code>EOF</code> - it's the end of the file, so it's trailing.</li>
+<li><code>}</code> - it's the end of a block, also trailing.</li>
+<li>Anything else must be another statement or expression, so we require a semicolon to separate them.</li>
+</ul>
+<p>This is a consequence of how <code>simp</code>'s grammar is laid out. It shows why writing a (mostly) formal grammar is useful!
+You can reason about the entirety of your syntax, and resolve ambiguities.</p>
+<hr data-content="end aside" \></details>
+<p>A statement is either a function, a variable, or an expression. To determine what we're looking at,
+we need to match on the current token:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#65737e;">// Stmt = StmtFn | StmtLet | StmtExpr ;
+</span><span>
+</span><span style="color:#b48ead;">enum </span><span>Stmt {
+</span><span>    Fn(Box&lt;StmtFn&gt;),
+</span><span>    Let(Box&lt;StmtLet&gt;),
+</span><span>    Expr(Box&lt;Expr&gt;),
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_stmt</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Stmt&gt; {
+</span><span>    </span><span style="color:#b48ead;">match</span><span> c.</span><span style="color:#96b5b4;">kind</span><span>() {
+</span><span>        </span><span style="color:#d08770;">KW_FN </span><span>=&gt; </span><span style="color:#96b5b4;">parse_stmt_fn</span><span>(c),
+</span><span>        </span><span style="color:#d08770;">KW_LET </span><span>=&gt; </span><span style="color:#96b5b4;">parse_stmt_let</span><span>(c),
+</span><span>        _ =&gt; </span><span style="color:#96b5b4;">parse_stmt_expr</span><span>(c),
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>A function has a name, a list of parameters, and a body.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>StmtFn {
+</span><span>    </span><span style="color:#bf616a;">name</span><span>: String,
+</span><span>    </span><span style="color:#bf616a;">params</span><span>: Vec&lt;String&gt;,
+</span><span>    </span><span style="color:#bf616a;">body</span><span>: Block,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_stmt_fn</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Stmt&gt; {
+</span><span>    assert!(c.</span><span style="color:#96b5b4;">eat</span><span>(</span><span style="color:#d08770;">KW_FN</span><span>));    
+</span><span>    </span><span style="color:#b48ead;">let</span><span> name = </span><span style="color:#96b5b4;">parse_ident</span><span>(c)?;
+</span><span>    </span><span style="color:#b48ead;">let</span><span> params = </span><span style="color:#96b5b4;">parse_param_list</span><span>(c)?;
+</span><span>    </span><span style="color:#b48ead;">let</span><span> body = </span><span style="color:#96b5b4;">parse_block</span><span>(c)?;
+</span><span>    Ok(Stmt::Fn(Box::new(StmtFn { name, params, body })))
+</span><span>}
+</span></code></pre>
+<p>The assert may seem strange, but <code>parse_stmt</code> does not <em>consume</em> the token it matches on.
+The sub-parser it dispatches expects to already be in the right context, so we assert on it.</p>
+<p>Identifiers are terminal symbols. To parse one, we must retrieve the lexeme of a <code>LIT_IDENT</code> token:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_ident</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;String&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> token = c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">LIT_IDENT</span><span>)?;
+</span><span>    Ok(c.</span><span style="color:#96b5b4;">lexeme</span><span>(token).</span><span style="color:#96b5b4;">to_owned</span><span>())
+</span><span>}
+</span></code></pre>
+<p>Parameters are a parenthesized, comma-separated list of identifiers:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_param_list</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Vec&lt;String&gt;&gt; {
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> list = Vec::new();
+</span><span>    c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">TOK_LPAREN</span><span>)?;
+</span><span>    </span><span style="color:#65737e;">// stop early if we have an empty list: `()`
+</span><span>    </span><span style="color:#b48ead;">if </span><span>!c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_RPAREN</span><span>) {
+</span><span>        </span><span style="color:#b48ead;">loop </span><span>{
+</span><span>            list.</span><span style="color:#96b5b4;">push</span><span>(</span><span style="color:#96b5b4;">parse_ident</span><span>(c)?);
+</span><span>            </span><span style="color:#65737e;">// stop if there&#39;s no comma,
+</span><span>            </span><span style="color:#65737e;">// or if the comma is trailing.
+</span><span>            </span><span style="color:#b48ead;">if </span><span>!c.</span><span style="color:#96b5b4;">eat</span><span>(</span><span style="color:#d08770;">TOK_COMMA</span><span>) || c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_RPAREN</span><span>) {
+</span><span>                </span><span style="color:#b48ead;">break</span><span>;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>    c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">TOK_RPAREN</span><span>)?;
+</span><span>    Ok(list)
+</span><span>}
+</span></code></pre>
+<p>It's a little more involved, because we also want to allow trailing commas.
+We'll actually want to re-use that code later for argument lists, so let's break it out right now:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_paren_list</span><span>&lt;F, T&gt;(
+</span><span>    </span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor,
+</span><span>    </span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">elem</span><span>: F,
+</span><span>) -&gt; Result&lt;Vec&lt;T&gt;&gt;
+</span><span style="color:#b48ead;">where
+</span><span>    F: FnMut(&amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;T&gt;,
+</span><span>{
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> list = Vec::new();
+</span><span>    c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">TOK_LPAREN</span><span>)?;
+</span><span>    </span><span style="color:#b48ead;">if </span><span>!c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_RPAREN</span><span>) {
+</span><span>        </span><span style="color:#b48ead;">loop </span><span>{
+</span><span>            list.</span><span style="color:#96b5b4;">push</span><span>(</span><span style="color:#96b5b4;">elem</span><span>(c)?);
+</span><span>            </span><span style="color:#b48ead;">if </span><span>!c.</span><span style="color:#96b5b4;">eat</span><span>(</span><span style="color:#d08770;">TOK_COMMA</span><span>) || c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_RPAREN</span><span>) {
+</span><span>                </span><span style="color:#b48ead;">break</span><span>;
+</span><span>            }
+</span><span>        }
+</span><span>    }
+</span><span>    c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">TOK_RPAREN</span><span>)?;
+</span><span>    Ok(list)
+</span><span>}
+</span></code></pre>
+<p>And use that instead in <code>parse_param_list</code>:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_param_list</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Vec&lt;String&gt;&gt; {
+</span><span>    </span><span style="color:#96b5b4;">parse_paren_list</span><span>(c, parse_ident)
+</span><span>}
+</span></code></pre>
+<p>A function's body is a block. It has an identical definition to <code>Program</code>:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>Block {
+</span><span>    </span><span style="color:#bf616a;">body</span><span>: Vec&lt;Stmt&gt;,
+</span><span>    </span><span style="color:#bf616a;">tail</span><span>: Option&lt;Expr&gt;, </span><span style="color:#65737e;">// see aside about trailing expressions
+</span><span>}
+</span></code></pre>
+<p>And its implementation is largely the same, except that now we also require braces to wrap the contents:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_block</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Vec&lt;Block&gt;&gt; {
+</span><span>    c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">TOK_LBRACE</span><span>)?;
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> body = Vec::new();
+</span><span>    </span><span style="color:#b48ead;">while </span><span>!c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_RBRACE</span><span>) {
+</span><span>        body.</span><span style="color:#96b5b4;">push</span><span>(</span><span style="color:#96b5b4;">parse_stmt</span><span>(c)?);
+</span><span>    }
+</span><span>    c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">TOK_RBRACE</span><span>)?;
+</span><span>
+</span><span>    </span><span style="color:#65737e;">// ...
+</span><span>}
+</span></code></pre>
+<p>Okay, I think you get the point. Recursively traverse the rules while consuming tokens.
+Let's skip ahead to something a bit more interesting.</p>
+<h2 id="parsing-expressions">Parsing expressions</h2>
+<p>To parse arithmetic, we have to think about <a href="https://en.wikipedia.org/wiki/Operator_associativity"><em>associativity</em></a>
+and <a href="https://en.wikipedia.org/wiki/Order_of_operations"><em>precedence</em></a>.
+In our case, both are already encoded within the grammar:</p>
+<pre style="background-color:#2b303b;color:#c0c5ce;"><code><span>(* some parts omitted for brevity *)
+</span><span>
+</span><span>ExprAdd = ExprMul { ( &quot;+&quot; | &quot;-&quot; ) ExprMul } ;
+</span><span>ExprMul = ExprUnary { ( &quot;*&quot; | &quot;/&quot; | &quot;%&quot; ) ExprUnary } ;
+</span><span>ExprUnary = [ &quot;-&quot; | &quot;!&quot; ] ExprPostfix ;
+</span><span>ExprPostfix = ExprPrimary { ExprCall } ;
+</span><span>
+</span><span>ExprPrimary = 
+</span><span>        | IDENTIFIER
+</span><span>        ;
+</span></code></pre>
+<ul>
+<li>If a rule A "contains" another rule B, then rule A has <em>lower</em> precedence.</li>
+<li>In the absence of parentheses, operators with higher precedence are grouped
+first.</li>
+<li>Associativity tells us how operators of the same precedence are grouped;
+for left-associative operators like <code>+</code> and <code>*</code>, the left side takes precedence.</li>
+</ul>
+<p>Consider an expression such as <code>a + b * d - c</code>:</p>
+<iframe
+    src="/intro-to-parsing/step-by-step-2.html"
+    style="border:none; width: 100%; height: 216px; overflow: hidden;"
+    onload="this.style.height=(this.contentWindow.document.body.scrollHeight+40)+'px';"
+></iframe>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">enum </span><span>Expr {
+</span><span>    Binary(Box&lt;ExprBinary&gt;),
+</span><span>    </span><span style="color:#65737e;">// ... more expressions
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>ExprBinary {
+</span><span>    </span><span style="color:#bf616a;">lhs</span><span>: Expr,
+</span><span>    </span><span style="color:#bf616a;">op</span><span>: BinaryOp,
+</span><span>    </span><span style="color:#bf616a;">rhs</span><span>: Expr,
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">enum </span><span>BinaryOp {
+</span><span>    Add,
+</span><span>    Subtract,
+</span><span>    </span><span style="color:#65737e;">// ... other operators
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_add</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> lhs = </span><span style="color:#96b5b4;">parse_expr_mul</span><span>(c)?;
+</span><span>    </span><span style="color:#b48ead;">loop </span><span>{
+</span><span>        </span><span style="color:#b48ead;">let</span><span> op = </span><span style="color:#b48ead;">match</span><span> c.</span><span style="color:#96b5b4;">kind</span><span>() {
+</span><span>            </span><span style="color:#d08770;">OP_PLUS </span><span>=&gt; BinaryOp::Add,
+</span><span>            </span><span style="color:#d08770;">OP_MINUS </span><span>=&gt; BinaryOp::Subtract,
+</span><span>            _ =&gt; </span><span style="color:#b48ead;">break</span><span>,
+</span><span>        };
+</span><span>        c.</span><span style="color:#96b5b4;">advance</span><span>(); </span><span style="color:#65737e;">// eat `op`
+</span><span>        </span><span style="color:#b48ead;">let</span><span> rhs = </span><span style="color:#96b5b4;">parse_expr_mul</span><span>(c)?;
+</span><span>        lhs = Expr::Binary(Box::new(ExprBinary { lhs, op, rhs }))
+</span><span>    }
+</span><span>    Ok(lhs)
+</span><span>}
+</span></code></pre>
+<p>We'll first recurse into <code>parse_expr_mul</code>, and then enter a loop.
+The loop attempts to match one of the valid operators at this precedence
+level, and converts them to their corresponding <code>BinaryOp</code> variants.</p>
+<p>If we can't match anything, we exit the loop. The <code>break</code> happens <em>before</em> we
+consume the operator token, which means that if there is an expression with lower precedence
+level which <em>can</em> consume the operator, it will find it once we return to it.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_mul</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> lhs = </span><span style="color:#96b5b4;">parse_expr_unary</span><span>(c)?;
+</span><span>    </span><span style="color:#b48ead;">loop </span><span>{
+</span><span>        </span><span style="color:#b48ead;">let</span><span> op = </span><span style="color:#b48ead;">match</span><span> c.</span><span style="color:#96b5b4;">kind</span><span>() {
+</span><span>            </span><span style="color:#d08770;">OP_STAR </span><span>=&gt; BinaryOp::Multiply,
+</span><span>            </span><span style="color:#d08770;">OP_SLASH </span><span>=&gt; BinaryOp::Divide,
+</span><span>            _ =&gt; </span><span style="color:#b48ead;">break</span><span>,
+</span><span>        };
+</span><span>        c.</span><span style="color:#96b5b4;">advance</span><span>(); </span><span style="color:#65737e;">// eat `op`
+</span><span>        </span><span style="color:#b48ead;">let</span><span> rhs = </span><span style="color:#96b5b4;">parse_expr_unary</span><span>(c)?;
+</span><span>        lhs = Expr::Binary(Box::new(ExprBinary { lhs, op, rhs }))
+</span><span>    }
+</span><span>    Ok(lhs)
+</span><span>}
+</span></code></pre>
+<p>This looks very familiar, but matches different operators, and calls <code>parse_expr_unary</code>,
+climbing higher in precedence.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_unary</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> op = </span><span style="color:#b48ead;">match</span><span> c.</span><span style="color:#96b5b4;">kind</span><span>() {
+</span><span>        </span><span style="color:#d08770;">OP_MINUS </span><span>=&gt; UnaryOp::Minus,
+</span><span>        </span><span style="color:#d08770;">OP_BANG </span><span>=&gt; UnaryOp::Not,
+</span><span>        _ =&gt; </span><span style="color:#b48ead;">return </span><span style="color:#96b5b4;">parse_expr_postfix</span><span>(c),
+</span><span>    };
+</span><span>    </span><span style="color:#b48ead;">let</span><span> rhs = </span><span style="color:#96b5b4;">parse_expr_unary</span><span>(c)?;
+</span><span>    Ok(Expr::Unary(Box::new(ExprUnary { op, rhs })))
+</span><span>}
+</span></code></pre>
+<p>For unary expressions like <code>-a</code> and <code>!a</code>, the operator comes first, and <em>then</em> its <code>rhs</code> sub-expression,
+where it loops back around to itself. In case we don't match any operators, we call <code>parse_expr_postfix</code>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_postfix</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let mut</span><span> expr = </span><span style="color:#96b5b4;">parse_expr_primary</span><span>(c)?;
+</span><span>    </span><span style="color:#b48ead;">while</span><span> c.</span><span style="color:#96b5b4;">at</span><span>(</span><span style="color:#d08770;">TOK_LPAREN</span><span>) {
+</span><span>        expr = </span><span style="color:#96b5b4;">parse_expr_call</span><span>(c, expr)?;
+</span><span>    }
+</span><span>    Ok(expr)
+</span><span>}
+</span></code></pre>
+<p>The parentheses come <em>after</em> the callee, like <code>f(a, b, c)</code>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_call</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor, </span><span style="color:#bf616a;">callee</span><span>: Expr) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> args = </span><span style="color:#96b5b4;">parse_arg_list</span><span>(c)?;
+</span><span>    Ok(Expr::Call(Box::new(ExprCall { callee, args })))
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_arg_list</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Vec&lt;Expr&gt;&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> args = </span><span style="color:#96b5b4;">parse_paren_list</span><span>(c, parse_expr)?;
+</span><span>    Ok(args)
+</span><span>}
+</span></code></pre>
+<p>There's <code>parse_paren_list</code> again, nice. But this time each element is an expression.
+This is why the technique is called <em>recursive</em> descent - we're recursing back into one of the rules
+which we descended from.</p>
+<p>When nesting expressions like <code>a(b(c()))</code>, each time we come across a call,
+we'll try to parse an argument list, where we recurse into <code>parse_expr</code> for each argument.
+That'll lead us back to another call expression. After parsing the innermost <code>c()</code>, we return
+back to <code>b(...)</code>, which is now complete too, so back out to <code>a(...)</code> we go. This process repeats
+no matter how many levels deep we are<sup class="footnote-reference"><a href="#17">16</a></sup>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_primary</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">match</span><span> c.</span><span style="color:#96b5b4;">kind</span><span>() {
+</span><span>        </span><span style="color:#d08770;">LIT_INT </span><span>=&gt; </span><span style="color:#96b5b4;">parse_expr_int</span><span>(c),
+</span><span>        </span><span style="color:#d08770;">LIT_STR </span><span>=&gt; </span><span style="color:#96b5b4;">parse_expr_str</span><span>(c),
+</span><span>        </span><span style="color:#d08770;">LIT_IDENT </span><span>=&gt; </span><span style="color:#96b5b4;">parse_expr_ident</span><span>(c),
+</span><span>        </span><span style="color:#d08770;">TOK_LBRACE </span><span>=&gt; </span><span style="color:#96b5b4;">parse_expr_block</span><span>(c),
+</span><span>        </span><span style="color:#d08770;">TOK_LPAREN </span><span>=&gt; </span><span style="color:#96b5b4;">parse_expr_group</span><span>(c),
+</span><span>        _ =&gt; </span><span style="color:#96b5b4;">error</span><span>(
+</span><span>            format!(&quot;</span><span style="color:#a3be8c;">unexpected token: </span><span style="color:#d08770;">{:?}</span><span>&quot;, c.</span><span style="color:#96b5b4;">kind</span><span>()),
+</span><span>            c.</span><span style="color:#96b5b4;">current</span><span>().span,
+</span><span>        )
+</span><span>        .</span><span style="color:#96b5b4;">into</span><span>(),
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>There are more cases here than anywhere else. Let's look at two of them:</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_int</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> token = c.</span><span style="color:#96b5b4;">must</span><span>(</span><span style="color:#d08770;">LIT_INT</span><span>)?;
+</span><span>    </span><span style="color:#b48ead;">let</span><span> value = c
+</span><span>        .</span><span style="color:#96b5b4;">lexeme</span><span>(token)
+</span><span>        .</span><span style="color:#96b5b4;">parse</span><span>()
+</span><span>        .</span><span style="color:#96b5b4;">map_err</span><span>(|</span><span style="color:#bf616a;">err</span><span>| </span><span style="color:#96b5b4;">error</span><span>(format!(&quot;</span><span style="color:#a3be8c;">failed to parse integer: </span><span style="color:#d08770;">{err}</span><span>&quot;), token.span))?;
+</span><span>    Ok(Expr::Int(Box::new(ExprInt { value })))
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">fn </span><span style="color:#8fa1b3;">parse_expr_block</span><span>(</span><span style="color:#bf616a;">c</span><span>: &amp;</span><span style="color:#b48ead;">mut</span><span> Cursor) -&gt; Result&lt;Expr&gt; {
+</span><span>    </span><span style="color:#b48ead;">let</span><span> inner = </span><span style="color:#96b5b4;">parse_block</span><span>(c)?;
+</span><span>    Ok(Expr::Block(Box::new(ExprBlock { inner })))
+</span><span>}
+</span></code></pre>
+<p>Integers come from <code>LIT_INT</code> tokens. We retrieve the token's lexeme, which is the integer as a string,
+and use the Rust standard library to parse it into a value. <code>parse_expr_str</code> and <code>parse_expr_ident</code>
+work much the same way.</p>
+<p>Block expressions are wrappers around blocks, re-using the same parsing code as the function body in <code>parse_stmt_fn</code>.
+Blocks are lists of statements, which is another place where we recurse in our <em>recursive</em> descent.</p>
+<p>A few nice consequences stem from this:</p>
+<ul>
+<li>functions may be declared within other functions</li>
+<li>blocks can be nested within other blocks</li>
+</ul>
+<p>...without us really having to explicitly handle that in any meaningful way<sup class="footnote-reference"><a href="#11">17</a></sup>. That's emergent behavior!</p>
+<p>We could choose to rein it in, for example by not recursing into <code>parse_stmt</code>, but writing a <code>parse_stmt_except_fn</code>
+which excludes it, and calling that instead. Then our parser would reject any functions declared within other functions.
+Though we'd have to be careful to <em>never</em> recurse into <code>parse_stmt</code> unless we absolutely mean to.</p>
+<h2 id="closing">Closing</h2>
+<p>That's as far as we'll go in this article. We have a <code>simp</code>le parser, which is hopefully easy to understand.
+We went a bit beyond a <em>truly</em> simple grammar, like <a href="https://en.wikipedia.org/wiki/Lisp_(programming_language)">Lisp</a>
+or <a href="https://en.wikipedia.org/wiki/ML_(programming_language)">ML</a>.</p>
+<p>Our parser is probably not very efficient! I haven't benchmarked it at all, but we're doing many small allocations
+all over the place. That can't be good. I'd like to follow this article up with one about a <em>flatter</em> memory
+representation for <code>simp</code>'s AST, and some benchmarks with colorful graphs.</p>
+<p>I'll leave you with a little REPL you can use to test out the parser:</p>
+<p><strong>TODO</strong>: REPL</p>
+<p>The code is <a href="https://github.com/jhwlr/simp">available on GitHub</a>.</p>
+<hr data-content="footnotes" \>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>Before I get flamed: This is a <em>gross</em> oversimplification.</p>
+</div>
+<div class="footnote-definition" id="10"><sup class="footnote-definition-label">2</sup>
+<p>Or at least how I understand it, I'm no academic!</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">3</sup>
+<p>You can also parse straight into executable code.</p>
+</div>
+<div class="footnote-definition" id="3"><sup class="footnote-definition-label">4</sup>
+<p>Concrete syntax trees are often used in <a href="https://en.wikipedia.org/wiki/Language_Server_Protocol">language servers</a>.</p>
+</div>
+<div class="footnote-definition" id="4"><sup class="footnote-definition-label">5</sup>
+<p>Any similarity in name to existing programming languages is purely coincidental, I looked it up and didn't find anything.</p>
+</div>
+<div class="footnote-definition" id="5"><sup class="footnote-definition-label">6</sup>
+<p>We're going all in on expressions with no <code>return</code> keyword! This complicates the parser a bit, but also makes it more
+interesting.</p>
+</div>
+<div class="footnote-definition" id="6"><sup class="footnote-definition-label">7</sup>
+<p>Our <code>Span</code> type is like <code>Range&lt;u32&gt;</code>, but it implements <code>Copy</code>. The standard library can't break the <code>Range</code> type, so
+we're stuck with making our own. It doesn't have first-class syntax, but at least it can still be used to directly index into strings.</p>
+</div>
+<div class="footnote-definition" id="8"><sup class="footnote-definition-label">8</sup>
+<p>We could also read one Rust <code>char</code> at a time. We won't allow unicode outside of strings, and spans are easier to produce when dealing
+with bytes, so we're not doing that.</p>
+</div>
+<div class="footnote-definition" id="7"><sup class="footnote-definition-label">9</sup>
+<p>It's possible to write a parser that doesn't stop at anything, and treats errors as part of the syntax tree. Another technique common in language servers!</p>
+</div>
+<div class="footnote-definition" id="9"><sup class="footnote-definition-label">10</sup>
+<p><a href="https://www.iso.org/standard/26153.html">Attempts</a> <a href="https://www.cl.cam.ac.uk/~mgk25/iso-ebnf.html">have been</a> <a href="https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form">made</a> to standardise it,
+but nothing seems to have stuck. Different tools accept different syntaxes, and research papers are similarly inconsistent.</p>
+</div>
+<div class="footnote-definition" id="12"><sup class="footnote-definition-label">11</sup>
+<p>I cannot recommend this book enough. The web version was my entrypoint into programming languages.</p>
+</div>
+<div class="footnote-definition" id="13"><sup class="footnote-definition-label">12</sup>
+<p>An identifier is a name given to some construct, like a function or variable.</p>
+</div>
+<div class="footnote-definition" id="14"><sup class="footnote-definition-label">13</sup>
+<p>A string is a sequence of characters, in our case wrapped in double quotes. They're used to store arbitrary text directly in source code.</p>
+</div>
+<div class="footnote-definition" id="15"><sup class="footnote-definition-label">14</sup>
+<p>Meaning there is no <code>return</code> keyword which tells the compiler that you want a specific value to be the return value.</p>
+</div>
+<div class="footnote-definition" id="16"><sup class="footnote-definition-label">15</sup>
+<p>These may appear in a few places, such as function calls (<code>f(a, b, c,)</code>) and parameter lists (<code>fn f(a, b, c,) {}</code>).</p>
+</div>
+<div class="footnote-definition" id="17"><sup class="footnote-definition-label">16</sup>
+<p>Until we hit a <a href="https://en.wikipedia.org/wiki/Stack_overflow">stack overflow</a>. There are ways to solve that. We could <a href="https://docs.rs/stacker/latest/stacker/">manually allocate our own stack</a>
+before entering the parser, and grow it when we are about to run out of space.</p>
+</div>
+<div class="footnote-definition" id="11"><sup class="footnote-definition-label">17</sup>
+<p>Well, at least in the parser. If functions can be declared in any scope, that means you have to track them in every scope
+in subsequent compilation stages.</p>
+</div>
+
+
+            </main>
+            <footer>
+                
+<p class="taxonomies">
+
+</p>
+
+                
+            </footer>
+        </div>
+    </body>
+</html>
+        
