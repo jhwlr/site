@@ -1,0 +1,22 @@
+name: Build and deploy GH Pages
+
+on:
+  push:
+    branches:
+      - 'main'
+
+permissions:
+  contents: "read"
+  id-token: "write"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: build_and_deploy
+        uses: shalzz/zola-deploy-action@90cd842959b82e0c012601be18ae249d6cdb1669 # v0.21.0
+        env:
+          PAGES_BRANCH: gh-pages
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
